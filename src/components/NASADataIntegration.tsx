@@ -20,30 +20,83 @@ const NASADataIntegration = () => {
   const [loading, setLoading] = useState(false);
   const [asteroidData, setAsteroidData] = useState<AsteroidData | null>(null);
 
+  const NASA_API_KEY = "UVsT6ih9Vud3RJxbUFyCr1hhWfXsuKfNlhEQpucf";
+
   const fetchNASAData = async () => {
     setLoading(true);
     
-    // Simulate API call with sample data
-    // In production, use: https://api.nasa.gov/neo/rest/v1/feed?api_key=YOUR_KEY
-    setTimeout(() => {
-      const sampleData: AsteroidData = {
-        name: "Impactor-2025",
-        designation: "2025 IC1",
-        diameter_min: 140,
-        diameter_max: 310,
-        velocity: 23.4,
-        approach_date: "2025-04-15",
-        miss_distance: 3154280,
-        is_hazardous: true
-      };
+    try {
+      // Get today's date and 7 days from now for the feed
+      const today = new Date();
+      const endDate = new Date();
+      endDate.setDate(today.getDate() + 7);
       
-      setAsteroidData(sampleData);
+      const startDateStr = today.toISOString().split('T')[0];
+      const endDateStr = endDate.toISOString().split('T')[0];
+      
+      const response = await fetch(
+        `https://api.nasa.gov/neo/rest/v1/feed?start_date=${startDateStr}&end_date=${endDateStr}&api_key=${NASA_API_KEY}`
+      );
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch NASA data");
+      }
+      
+      const data = await response.json();
+      
+      // Get the first potentially hazardous asteroid from the response
+      let selectedAsteroid = null;
+      
+      for (const date in data.near_earth_objects) {
+        const asteroids = data.near_earth_objects[date];
+        const hazardous = asteroids.find((a: any) => a.is_potentially_hazardous_asteroid);
+        if (hazardous) {
+          selectedAsteroid = hazardous;
+          break;
+        }
+      }
+      
+      // If no hazardous, get the first asteroid
+      if (!selectedAsteroid) {
+        for (const date in data.near_earth_objects) {
+          if (data.near_earth_objects[date].length > 0) {
+            selectedAsteroid = data.near_earth_objects[date][0];
+            break;
+          }
+        }
+      }
+      
+      if (selectedAsteroid) {
+        const closeApproach = selectedAsteroid.close_approach_data[0];
+        const diameter = selectedAsteroid.estimated_diameter.meters;
+        
+        const asteroidData: AsteroidData = {
+          name: selectedAsteroid.name,
+          designation: selectedAsteroid.designation || selectedAsteroid.id,
+          diameter_min: Math.round(diameter.estimated_diameter_min),
+          diameter_max: Math.round(diameter.estimated_diameter_max),
+          velocity: parseFloat(closeApproach.relative_velocity.kilometers_per_second),
+          approach_date: closeApproach.close_approach_date,
+          miss_distance: parseFloat(closeApproach.miss_distance.kilometers),
+          is_hazardous: selectedAsteroid.is_potentially_hazardous_asteroid
+        };
+        
+        setAsteroidData(asteroidData);
+        toast.success("NASA NEO data loaded!", {
+          description: `Retrieved real data for ${asteroidData.name}`
+        });
+      } else {
+        toast.error("No asteroid data available for this period");
+      }
+      
       setLoading(false);
-      
-      toast.success("NASA NEO data loaded!", {
-        description: `Retrieved data for ${sampleData.name}`
+    } catch (error) {
+      console.error("Error fetching NASA data:", error);
+      setLoading(false);
+      toast.error("Failed to fetch NASA data", {
+        description: "Please try again later"
       });
-    }, 1500);
+    }
   };
 
   return (
