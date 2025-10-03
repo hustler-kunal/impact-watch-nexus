@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useLenis } from "@/hooks/useLenis";
 import Hero from "@/components/Hero";
 import Features from "@/components/Features";
 import AsteroidViewer from "@/components/AsteroidViewer";
@@ -13,6 +14,8 @@ import DataExport from "@/components/DataExport";
 import { Badge } from "@/components/ui/badge";
 
 const Index = () => {
+  useLenis();
+  
   const [asteroidSize, setAsteroidSize] = useState(200);
   const [asteroidSpeed, setAsteroidSpeed] = useState(20);
   const [impactAngle, setImpactAngle] = useState(45);

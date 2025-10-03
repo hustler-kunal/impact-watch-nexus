@@ -63,18 +63,23 @@ const Features = () => {
             return (
               <Card 
                 key={index}
-                className="p-6 space-y-4 bg-card/50 backdrop-blur-sm border-border hover:border-primary/50 transition-all duration-300 group hover:shadow-glow-orbit animate-fade-in"
+                className="p-6 space-y-4 glass-card glass-hover hover-lift group animate-fade-in relative overflow-hidden"
                 style={{ animationDelay: `${index * 0.1}s` }}
               >
-                <div className={`p-3 rounded-lg bg-card w-fit group-hover:shadow-glow-asteroid transition-all ${feature.color}`}>
-                  <Icon className="w-6 h-6" />
+                {/* Animated gradient on hover */}
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-500 animated-gradient" />
+                
+                <div className="relative z-10">
+                  <div className={`p-3 rounded-lg bg-card/80 backdrop-blur w-fit glow-border group-hover:scale-110 transition-all duration-300 ${feature.color}`}>
+                    <Icon className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors duration-300">
+                    {feature.title}
+                  </h3>
+                  <p className="text-muted-foreground leading-relaxed">
+                    {feature.description}
+                  </p>
                 </div>
-                <h3 className="text-xl font-semibold text-foreground">
-                  {feature.title}
-                </h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  {feature.description}
-                </p>
               </Card>
             );
           })}
