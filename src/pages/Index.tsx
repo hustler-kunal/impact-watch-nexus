@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useLenis } from "@/hooks/useLenis";
+import { useScrollVelocity } from "@/hooks/useScrollAnimation";
 import Hero from "@/components/Hero";
 import Features from "@/components/Features";
 import AsteroidViewer from "@/components/AsteroidViewer";
@@ -15,6 +16,28 @@ import { Badge } from "@/components/ui/badge";
 
 const Index = () => {
   useLenis();
+  useScrollVelocity();
+  
+  const simulatorRef = useRef<HTMLElement>(null);
+  const nasaRef = useRef<HTMLElement>(null);
+  
+  useEffect(() => {
+    const handleScroll = () => {
+      const elements = document.querySelectorAll('.scroll-fade-in, .scroll-slide-left, .scroll-slide-right, .scroll-scale-in');
+      elements.forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        const isVisible = rect.top < window.innerHeight * 0.85;
+        if (isVisible) {
+          el.classList.add('in-view');
+        }
+      });
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    handleScroll(); // Initial check
+
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
   
   const [asteroidSize, setAsteroidSize] = useState(200);
   const [asteroidSpeed, setAsteroidSpeed] = useState(20);
@@ -64,14 +87,30 @@ const Index = () => {
       <Features />
 
       {/* Simulator Section */}
-      <section id="simulator" className="py-20 px-4 bg-gradient-to-b from-card/20 to-background">
-        <div className="max-w-7xl mx-auto space-y-8">
-          <div className="text-center mb-12">
-            <Badge className="mb-4 bg-accent/20 text-accent border-accent/50">
+      <section ref={simulatorRef} id="simulator" className="py-20 px-4 bg-gradient-to-b from-card/20 to-background relative overflow-hidden">
+        {/* Animated cosmic background */}
+        <div className="absolute inset-0 opacity-20">
+          {[...Array(15)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-2 h-2 bg-primary rounded-full cosmic-particle"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 8}s`,
+                animationDuration: `${8 + Math.random() * 8}s`
+              }}
+            />
+          ))}
+        </div>
+        
+        <div className="max-w-7xl mx-auto space-y-8 relative z-10">
+          <div className="text-center mb-12 scroll-fade-in">
+            <Badge className="mb-4 bg-accent/20 text-accent border-accent/50 hover-lift">
               Interactive Simulator
             </Badge>
             <h2 className="text-4xl md:text-5xl font-bold mb-4">
-              Asteroid Impact <span className="text-primary">Simulator</span>
+              Asteroid Impact <span className="gradient-text">Simulator</span>
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
               Adjust parameters to visualize different impact scenarios and analyze potential consequences
@@ -80,7 +119,7 @@ const Index = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Left Column - 3D Viewer & Location */}
-            <div className="space-y-6">
+            <div className="space-y-6 scroll-slide-left">
               <AsteroidViewer
                 asteroidSize={asteroidSize / 100}
                 asteroidSpeed={asteroidSpeed / 10}
@@ -90,7 +129,7 @@ const Index = () => {
             </div>
 
             {/* Right Column - Controls & Calculations */}
-            <div className="space-y-6">
+            <div className="space-y-6 scroll-slide-right">
               <ParameterControls
                 asteroidSize={asteroidSize}
                 setAsteroidSize={setAsteroidSize}
@@ -111,35 +150,52 @@ const Index = () => {
 
           {/* Additional Analysis Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
-            <TrajectoryTimeline 
-              asteroidSpeed={asteroidSpeed}
-              asteroidDistance={asteroidDistance}
-            />
-            <DataExport
-              asteroidSize={asteroidSize}
-              asteroidSpeed={asteroidSpeed}
-              impactAngle={impactAngle}
-              calculations={calculations}
-            />
+            <div className="scroll-scale-in" style={{ transitionDelay: '0.1s' }}>
+              <TrajectoryTimeline 
+                asteroidSpeed={asteroidSpeed}
+                asteroidDistance={asteroidDistance}
+              />
+            </div>
+            <div className="scroll-scale-in" style={{ transitionDelay: '0.2s' }}>
+              <DataExport
+                asteroidSize={asteroidSize}
+                asteroidSpeed={asteroidSpeed}
+                impactAngle={impactAngle}
+                calculations={calculations}
+              />
+            </div>
           </div>
         </div>
       </section>
 
       {/* NASA Data Integration Section */}
-      <section className="py-20 px-4">
-        <div className="max-w-7xl mx-auto">
+      <section ref={nasaRef} className="py-20 px-4 relative overflow-hidden">
+        {/* Cosmic mesh background */}
+        <div className="absolute inset-0 opacity-5" style={{
+          backgroundImage: 'radial-gradient(circle at 2px 2px, hsl(var(--primary)) 1px, transparent 0)',
+          backgroundSize: '40px 40px'
+        }} />
+        
+        <div className="max-w-7xl mx-auto scroll-fade-in">
           <NASADataIntegration />
         </div>
       </section>
 
-      <NASADataPanel />
-      <MitigationStrategies />
+      <div className="scroll-fade-in">
+        <NASADataPanel />
+      </div>
+      
+      <div className="scroll-scale-in">
+        <MitigationStrategies />
+      </div>
 
       {/* Footer */}
-      <footer className="py-12 px-4 border-t border-border bg-card/20">
-        <div className="max-w-7xl mx-auto text-center space-y-4">
+      <footer className="py-12 px-4 border-t border-border bg-card/20 relative overflow-hidden">
+        <div className="absolute inset-0 animated-gradient opacity-10" />
+        
+        <div className="max-w-7xl mx-auto text-center space-y-4 relative z-10 scroll-fade-in">
           <h3 className="text-2xl font-bold">
-            <span className="bg-gradient-cosmic bg-clip-text text-transparent">
+            <span className="gradient-text glow-text">
               Impact Watch Nexus
             </span>
           </h3>
@@ -147,12 +203,12 @@ const Index = () => {
             Built for NASA Space Apps Challenge 2025. Empowering planetary defense through 
             data visualization, scientific modeling, and public education.
           </p>
-          <div className="flex justify-center gap-6 text-sm text-muted-foreground">
-            <span>Data: NASA NEO API & USGS</span>
+          <div className="flex justify-center gap-6 text-sm text-muted-foreground flex-wrap">
+            <span className="hover:text-primary transition-colors cursor-default">Data: NASA NEO API & USGS</span>
             <span>•</span>
-            <span>Physics: Keplerian Mechanics</span>
+            <span className="hover:text-primary transition-colors cursor-default">Physics: Keplerian Mechanics</span>
             <span>•</span>
-            <span>Open Source</span>
+            <span className="hover:text-primary transition-colors cursor-default">Open Source</span>
           </div>
         </div>
       </footer>
