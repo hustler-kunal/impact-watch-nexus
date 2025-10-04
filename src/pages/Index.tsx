@@ -1,6 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useLenis } from "@/hooks/useLenis";
-import { useScrollVelocity } from "@/hooks/useScrollAnimation";
 import Hero from "@/components/Hero";
 import Features from "@/components/Features";
 import AsteroidViewer from "@/components/AsteroidViewer";
@@ -13,30 +12,33 @@ import TrajectoryTimeline from "@/components/TrajectoryTimeline";
 import NASADataIntegration from "@/components/NASADataIntegration";
 import DataExport from "@/components/DataExport";
 import { Badge } from "@/components/ui/badge";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const Index = () => {
   useLenis();
-  useScrollVelocity();
   
   const simulatorRef = useRef<HTMLElement>(null);
   const nasaRef = useRef<HTMLElement>(null);
   
   useEffect(() => {
-    const handleScroll = () => {
-      const elements = document.querySelectorAll('.scroll-fade-in, .scroll-slide-left, .scroll-slide-right, .scroll-scale-in');
-      elements.forEach((el) => {
-        const rect = el.getBoundingClientRect();
-        const isVisible = rect.top < window.innerHeight * 0.85;
-        if (isVisible) {
-          el.classList.add('in-view');
-        }
-      });
-    };
+    const revealSelector = ".scroll-fade-in, .scroll-slide-left, .scroll-slide-right, .scroll-scale-in";
+    const elements = Array.from(document.querySelectorAll(revealSelector));
+    if (!elements.length) return;
 
-    window.addEventListener('scroll', handleScroll);
-    handleScroll(); // Initial check
+    const io = new IntersectionObserver(
+      (entries, obs) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("in-view");
+            obs.unobserve(entry.target); // one-time animation
+          }
+        });
+      },
+      { threshold: 0.15, rootMargin: "0px 0px -10% 0px" }
+    );
 
-    return () => window.removeEventListener('scroll', handleScroll);
+    elements.forEach((el) => io.observe(el));
+    return () => io.disconnect();
   }, []);
   
   const [asteroidSize, setAsteroidSize] = useState(200);
@@ -83,6 +85,9 @@ const Index = () => {
 
   return (
     <main className="min-h-screen bg-background">
+      <div className="flex justify-end px-4 pt-4">
+        <ThemeToggle />
+      </div>
       <Hero />
       <Features />
 

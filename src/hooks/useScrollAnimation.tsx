@@ -29,29 +29,3 @@ export const useScrollAnimation = (ref: RefObject<HTMLElement>, className: strin
   }, [ref, className]);
 };
 
-export const useScrollVelocity = () => {
-  useEffect(() => {
-    let lastScrollY = window.scrollY;
-    let lastTime = Date.now();
-    let velocity = 0;
-
-    const updateVelocity = () => {
-      const currentScrollY = window.scrollY;
-      const currentTime = Date.now();
-      const deltaY = currentScrollY - lastScrollY;
-      const deltaTime = currentTime - lastTime;
-
-      if (deltaTime > 0) {
-        velocity = Math.abs(deltaY / deltaTime);
-        document.documentElement.style.setProperty('--scroll-velocity', velocity.toFixed(2));
-      }
-
-      lastScrollY = currentScrollY;
-      lastTime = currentTime;
-
-      requestAnimationFrame(updateVelocity);
-    };
-
-    requestAnimationFrame(updateVelocity);
-  }, []);
-};

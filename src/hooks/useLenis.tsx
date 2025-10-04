@@ -1,37 +1,69 @@
-import { useEffect } from 'react';
-import Lenis from '@studio-freight/lenis';
+import { useEffect } from "react";
+import Lenis from "@studio-freight/lenis";
+
+type LenisScrollEvent = {
+  velocity: number;
+  direction: number;
+  scroll: number;
+};
+
+declare global {
+  interface Window {
+    lenis?: Lenis;
+  }
+}
 
 export const useLenis = () => {
   useEffect(() => {
+    // A slightly longer duration + lower lerp gives a “glide” feeling without jank.
+    // clampWheel speeds up reaction while keeping easing fluid.
     const lenis = new Lenis({
-      duration: 1.5,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      orientation: 'vertical',
-      gestureOrientation: 'vertical',
       smoothWheel: true,
-      wheelMultiplier: 1.2,
-      touchMultiplier: 2.5,
-      infinite: false,
-      lerp: 0.08, // Lower = smoother, more physics-like
+      lerp: 0.07,            // responsiveness vs smoothness balance
+      wheelMultiplier: 1,
+      touchMultiplier: 1,
+      duration: 1.0,
+      easing: (t) => 1 - Math.pow(1 - t, 3),
     });
 
-    // Track velocity for scroll-based effects
-    lenis.on('scroll', ({ velocity, direction, scroll }: any) => {
-      // Set velocity as CSS variable for animations
-      document.documentElement.style.setProperty('--scroll-velocity', Math.abs(velocity).toString());
-      document.documentElement.style.setProperty('--scroll-direction', direction.toString());
-      document.documentElement.style.setProperty('--scroll-progress', scroll.toString());
-    });
+    window.lenis = lenis;
 
-    function raf(time: number) {
+    let lastStamp = 0;
+    const handleScrollTelemetry = ({ velocity, direction, scroll }: LenisScrollEvent) => {
+      const now = performance.now();
+      // Throttle DOM writes to ~30fps (every ~33ms) to avoid layout jank on low-end GPUs
+      if (now - lastStamp < 33) return;
+      lastStamp = now;
+      const v = Math.abs(velocity);
+      const rootStyle = document.documentElement.style;
+      rootStyle.setProperty("--scroll-velocity", v.toFixed(3));
+      rootStyle.setProperty("--scroll-direction", direction.toString());
+      rootStyle.setProperty("--scroll-progress", scroll.toFixed(2));
+    };
+
+    lenis.on("scroll", handleScrollTelemetry);
+
+    let frameId: number;
+    const raf = (time: number) => {
       lenis.raf(time);
-      requestAnimationFrame(raf);
-    }
+      frameId = requestAnimationFrame(raf);
+    };
+    frameId = requestAnimationFrame(raf);
 
-    requestAnimationFrame(raf);
+    const handleResize = () => {
+      lenis.resize();
+    };
+
+    window.addEventListener("resize", handleResize);
 
     return () => {
+      window.removeEventListener("resize", handleResize);
+      lenis.off("scroll", handleScrollTelemetry);
+      cancelAnimationFrame(frameId);
       lenis.destroy();
+      if (window.lenis === lenis) {
+        delete window.lenis;
+      }
     };
   }, []);
 };
