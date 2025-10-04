@@ -1,25 +1,46 @@
 import { useRef, useState } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import { OrbitControls, Sphere, Stars, Trail } from "@react-three/drei";
 import * as THREE from "three";
+import { createEarthMaterial } from "@/components/EarthTexture";
+import { TextureLoader } from "three";
 
 const Earth = () => {
   const earthRef = useRef<THREE.Mesh>(null);
-  
-  useFrame(() => {
-    if (earthRef.current) {
-      earthRef.current.rotation.y += 0.001;
-    }
+  const cloudsRef = useRef<THREE.Mesh>(null);
+  // Attempt to load earth textures (if not present will fallback)
+  // Load textures together; if files missing, they may throw. To avoid build break, wrap in try
+  let material: THREE.MeshStandardMaterial;
+  try {
+  const [day, normal, rough] = useLoader(TextureLoader, [
+      '/earth-day.jpg',
+      '/earth-normal.jpg',
+      '/earth-roughness.jpg'
+    ]);
+    material = createEarthMaterial({ map: day, normalMap: normal, roughnessMap: rough });
+  } catch {
+    material = createEarthMaterial();
+  }
+
+  useFrame((_, delta) => {
+    if (earthRef.current) earthRef.current.rotation.y += delta * 0.05;
+    if (cloudsRef.current) cloudsRef.current.rotation.y += delta * 0.02;
   });
 
   return (
-    <Sphere ref={earthRef} args={[2, 64, 64]} position={[0, 0, 0]}>
-      <meshStandardMaterial 
-        color="#4A90E2" 
-        roughness={0.7}
-        metalness={0.3}
-      />
-    </Sphere>
+    <group>
+      <Sphere ref={earthRef} args={[2, 128, 128]} position={[0, 0, 0]}>
+        <primitive object={material} attach="material" />
+      </Sphere>
+      {/* Atmospheric glow */}
+      <Sphere args={[2.08, 64, 64]} position={[0,0,0]}>
+        <meshBasicMaterial color="#3ba9ff" transparent opacity={0.15} blending={THREE.AdditiveBlending} />
+      </Sphere>
+      {/* Cloud layer (simple noise texture placeholder) */}
+      <Sphere ref={cloudsRef} args={[2.05, 64, 64]}>
+        <meshStandardMaterial transparent opacity={0.25} depthWrite={false} color="#ffffff" />
+      </Sphere>
+    </group>
   );
 };
 
@@ -66,12 +87,12 @@ interface AsteroidViewerProps {
 
 const AsteroidViewer = ({ asteroidSize, asteroidSpeed, asteroidDistance }: AsteroidViewerProps) => {
   return (
-    <div className="w-full h-[500px] rounded-xl overflow-hidden bg-card border border-border shadow-glow-orbit">
-      <Canvas camera={{ position: [0, 5, 12], fov: 60 }}>
-        <color attach="background" args={["#0A0E27"]} />
-        <ambientLight intensity={0.3} />
-        <pointLight position={[10, 10, 10]} intensity={1} />
-        <pointLight position={[-10, -10, -10]} intensity={0.5} color="#4A90E2" />
+    <div className="w-full h-[500px] rounded-xl overflow-hidden bg-card/40 border border-border shadow-md relative">
+      <Canvas camera={{ position: [0, 4, 10], fov: 55 }}>
+        <color attach="background" args={["#050814"]} />
+        <ambientLight intensity={0.4} />
+        <directionalLight position={[6, 8, 4]} intensity={1.2} />
+        <directionalLight position={[-6, -4, -8]} intensity={0.3} color="#3b82f6" />
         
         <Stars 
           radius={100} 
@@ -90,12 +111,9 @@ const AsteroidViewer = ({ asteroidSize, asteroidSpeed, asteroidDistance }: Aster
           distance={asteroidDistance}
         />
         
-        <OrbitControls 
-          enablePan={false}
-          minDistance={8}
-          maxDistance={20}
-        />
+        <OrbitControls enablePan={false} minDistance={6} maxDistance={18} />
       </Canvas>
+      <div className="absolute inset-x-0 top-0 h-24 pointer-events-none bg-gradient-to-b from-background/60 to-transparent" />
     </div>
   );
 };

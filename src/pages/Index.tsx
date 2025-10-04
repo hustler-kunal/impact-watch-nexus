@@ -12,7 +12,8 @@ import TrajectoryTimeline from "@/components/TrajectoryTimeline";
 import NASADataIntegration from "@/components/NASADataIntegration";
 import DataExport from "@/components/DataExport";
 import { Badge } from "@/components/ui/badge";
-import ThemeToggle from "@/components/ThemeToggle";
+// Removed top navbar in favor of bottom dock
+import Dock from "@/components/Dock";
 
 const Index = () => {
   useLenis();
@@ -84,15 +85,14 @@ const Index = () => {
   }, [asteroidSize, asteroidSpeed, impactAngle]);
 
   return (
-    <main className="min-h-screen bg-background">
-      <div className="flex justify-end px-4 pt-4">
-        <ThemeToggle />
-      </div>
+    <main id="top" className="min-h-screen bg-background">
+      <Dock />
+      <div>{/* content wrapper */}
       <Hero />
       <Features />
 
       {/* Simulator Section */}
-      <section ref={simulatorRef} id="simulator" className="py-20 px-4 bg-gradient-to-b from-card/20 to-background relative overflow-hidden">
+  <section ref={simulatorRef} id="simulator" className="py-20 px-4 bg-gradient-to-b from-card/10 to-background relative overflow-hidden">
         {/* Animated cosmic background */}
         <div className="absolute inset-0 opacity-20">
           {[...Array(15)].map((_, i) => (
@@ -174,7 +174,7 @@ const Index = () => {
       </section>
 
       {/* NASA Data Integration Section */}
-      <section ref={nasaRef} className="py-20 px-4 relative overflow-hidden">
+  <section id="nasa-data" ref={nasaRef} className="py-20 px-4 relative overflow-hidden">
         {/* Cosmic mesh background */}
         <div className="absolute inset-0 opacity-5" style={{
           backgroundImage: 'radial-gradient(circle at 2px 2px, hsl(var(--primary)) 1px, transparent 0)',
@@ -190,7 +190,7 @@ const Index = () => {
         <NASADataPanel />
       </div>
       
-      <div className="scroll-scale-in">
+      <div id="strategies" className="scroll-scale-in">
         <MitigationStrategies />
       </div>
 
@@ -217,6 +217,7 @@ const Index = () => {
           </div>
         </div>
       </footer>
+      </div>
     </main>
   );
 };
