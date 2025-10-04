@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { PerformanceModeProvider } from "@/hooks/usePerformanceMode";
 
 const queryClient = new QueryClient();
 
@@ -14,6 +15,7 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ErrorBoundary>
+          <PerformanceModeProvider>
           <Toaster />
           <Sonner />
           <BrowserRouter>
@@ -23,6 +25,7 @@ const App = () => {
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
+          </PerformanceModeProvider>
         </ErrorBoundary>
       </TooltipProvider>
     </QueryClientProvider>

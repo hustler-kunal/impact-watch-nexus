@@ -17,12 +17,15 @@ import DataExport from "@/components/DataExport";
 import { Badge } from "@/components/ui/badge";
 // Removed top navbar in favor of bottom dock
 import Dock from "@/components/Dock";
+import { usePerformanceMode } from "@/hooks/usePerformanceMode";
+import { Button } from "@/components/ui/button";
 
 const Index = () => {
   useLenis();
   
   const simulatorRef = useRef<HTMLElement>(null);
   const nasaRef = useRef<HTMLElement>(null);
+  const { lowPerf, toggle } = usePerformanceMode();
   
   useEffect(() => {
     const revealSelector = ".scroll-fade-in, .scroll-slide-left, .scroll-slide-right, .scroll-scale-in";
@@ -98,6 +101,11 @@ const Index = () => {
   return (
     <main id="top" className="min-h-screen bg-background">
       <Dock />
+      <div className="fixed bottom-4 right-4 z-50">
+        <Button variant={lowPerf ? 'default' : 'outline'} size="sm" onClick={toggle} className="shadow-md">
+          {lowPerf ? 'Performance: Low' : 'Performance: High'}
+        </Button>
+      </div>
       <div>{/* content wrapper */}
       <Hero />
       <Features />

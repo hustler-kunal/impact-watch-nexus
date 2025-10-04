@@ -5,6 +5,7 @@ import * as THREE from "three";
 // Remove external dependencies: use self-contained procedural earth
 import ProceduralEarth from "@/components/globe/ProceduralEarth";
 import TexturedEarth from "@/components/globe/TexturedEarth";
+import { usePerformanceMode } from "@/hooks/usePerformanceMode";
 
 // Simple procedural fallback Earth (no external textures required)
 const SimpleEarth = () => {
@@ -61,23 +62,23 @@ interface AsteroidViewerProps {
 }
 
 const AsteroidViewer = ({ asteroidSize, asteroidSpeed, asteroidDistance }: AsteroidViewerProps) => {
-  // No remote loading now; always display procedural earth
+  const { lowPerf } = usePerformanceMode();
 
   return (
     <div className="w-full h-[500px] rounded-xl overflow-hidden bg-card/40 border border-border shadow-md relative">
-      <Canvas camera={{ position: [0, 4, 10], fov: 55 }}>
+      <Canvas camera={{ position: [0, 4, 10], fov: lowPerf ? 60 : 55 }}>
         <color attach="background" args={["#050814"]} />
-        <ambientLight intensity={0.5} />
-        <directionalLight position={[6, 8, 4]} intensity={1.4} />
-        <directionalLight position={[-6, -4, -8]} intensity={0.4} color="#3b82f6" />
-        <Stars radius={100} depth={50} count={4000} factor={4} saturation={0} fade speed={1} />
+        <ambientLight intensity={0.45} />
+        <directionalLight position={[6, 8, 4]} intensity={1.2} />
+        {!lowPerf && <directionalLight position={[-6, -4, -8]} intensity={0.35} color="#3b82f6" />}
+        {!lowPerf && <Stars radius={100} depth={50} count={4000} factor={4} saturation={0} fade speed={1} />}
         {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('earth') === 'texture' ? (
-          <TexturedEarth />
+          <TexturedEarth rotationSpeed={lowPerf ? 0.02 : 0.05} />
         ) : (
           <ProceduralEarth />
         )}
-        <Asteroid size={asteroidSize} speed={asteroidSpeed} distance={asteroidDistance} />
-        <OrbitControls enablePan={false} minDistance={6} maxDistance={18} />
+        <Asteroid size={asteroidSize} speed={asteroidSpeed * (lowPerf ? 0.7 : 1)} distance={asteroidDistance} />
+        <OrbitControls enablePan={false} minDistance={6} maxDistance={18} enableDamping={!lowPerf} />
       </Canvas>
       <div className="absolute inset-x-0 top-0 h-24 pointer-events-none bg-gradient-to-b from-background/60 to-transparent" />
     </div>

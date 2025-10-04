@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Satellite, RefreshCw, Database, TrendingUp } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
+import { getJson } from "@/lib/http";
 
 interface AsteroidData {
   name: string;
@@ -56,13 +57,8 @@ const NASADataIntegration = () => {
         return; // avoid redundant fetch same window
       }
       const url = `https://api.nasa.gov/neo/rest/v1/feed?start_date=${startDateStr}&end_date=${endDateStr}&api_key=${NASA_API_KEY}`;
-      const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
-      
-      if (!response.ok) {
-        throw new Error("Failed to fetch NASA data");
-      }
-      
-      const data = await response.json();
+  interface FeedResponse { near_earth_objects: Record<string, RawAsteroid[]> }
+  const data: FeedResponse = await getJson(url, {}, { retries: 2, backoffMs: 700, cacheKey: `neo:${cacheKey}`, cacheTtlMs: 5 * 60_000 });
       
       // Get the first potentially hazardous asteroid from the response
       let selectedAsteroid = null;
@@ -143,9 +139,23 @@ const NASADataIntegration = () => {
         </Button>
       </div>
 
+      <div className="flex flex-wrap gap-2 text-xs">
+        {error && (
+          <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/40">Error</Badge>
+        )}
+        {loading && (
+          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/40 animate-pulse">Loading</Badge>
+        )}
+        {asteroidData && !loading && !error && (
+          <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/40">Live</Badge>
+        )}
+        {NASA_API_KEY === 'DEMO_KEY' && (
+          <Badge variant="outline" className="bg-yellow-500/10 text-yellow-400 border-yellow-500/40">DEMO_KEY</Badge>
+        )}
+      </div>
       {error && (
-        <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/30 text-sm text-destructive">
-          API Error: {error} {NASA_API_KEY === 'DEMO_KEY' && <span className="ml-2 italic">(Using DEMO_KEY may be rate limited)</span>}
+        <div className="p-3 rounded-md bg-destructive/10 border border-destructive/30 text-xs text-destructive leading-relaxed">
+          {error}
         </div>
       )}
       {asteroidData ? (

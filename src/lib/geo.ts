@@ -78,6 +78,8 @@ export interface ImpactSimulationResult {
   tsunamiPotential: boolean;
   seismicSeverity: string;
   notes: string[];
+  blastRadiusM: number; // approximate severe blast radius
+  fragmentation: boolean; // whether likely to fragment before impact
 }
 
 export function simulateImpact(input: ImpactSimulationInput): ImpactSimulationResult {
@@ -90,11 +92,16 @@ export function simulateImpact(input: ImpactSimulationInput): ImpactSimulationRe
   const tsunami = targetType === 'ocean';
   const seismic = tons > 1e7 ? 'extreme' : tons > 1e5 ? 'severe' : tons > 1e3 ? 'moderate' : 'low';
   const notes: string[] = [];
+  // Very rough fragmentation threshold: below ~50m diameter & velocity high
+  const fragmentation = diameterM < 50 && velocity > 18000;
+  if (fragmentation) notes.push('Possible mid-air fragmentation');
+  // Approximate blast radius scaling ~ cube root of energy (empirical visual)
+  const blastRadiusM = Math.cbrt(retained) * 0.01; // tuned scalar for visual radius
   if (tsunami) notes.push('Potential large tsunami generation');
   if (targetType === 'mountain') notes.push('Mountain terrain reduces crater size and increases ejecta confinement');
   if (atten < 0.6) notes.push('Significant atmospheric energy loss');
   if (tons > 1e6) notes.push('Global climatic effects possible');
-  return { impactEnergyJ: E, energyTonsTNT: tons, retainedEnergyJ: retained, craterDiameterM: crater, tsunamiPotential: tsunami, seismicSeverity: seismic, notes };
+  return { impactEnergyJ: E, energyTonsTNT: tons, retainedEnergyJ: retained, craterDiameterM: crater, tsunamiPotential: tsunami, seismicSeverity: seismic, notes, blastRadiusM, fragmentation };
 }
 
 // Format helpers
