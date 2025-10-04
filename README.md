@@ -71,3 +71,54 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
+## Textured Earth (Optional)
+
+The 3D viewer uses a procedural Earth by default (no external assets). To enable a high-resolution textured Earth instead:
+
+1. Create the directory: `public/textures/earth`
+2. Add one or more of these files (only `earth_day.jpg` is strictly required):
+	- `earth_day.jpg` (required – daytime color map)
+	- `earth_night.jpg` (city lights / night map)
+	- `earth_normal.jpg` (normal map for terrain relief)
+	- `earth_specular.jpg` (specular map – oceans reflections)
+	- `earth_clouds.png` (transparent clouds layer)
+3. Start the dev server if not already running.
+4. Open the app with the query flag:
+
+```
+http://localhost:5173/?earth=texture
+```
+
+If the day texture fails to load, the viewer automatically falls back to the procedural Earth so you never get a blank screen.
+
+## Production Setup
+
+1. Copy `.env.example` to `.env` and set `VITE_NASA_API_KEY`.
+2. Run the linter & type check to ensure no issues.
+3. Build:
+	- `npm run build` (outputs to `dist/`).
+4. Serve statically (e.g. with `npm install -g serve` then `serve dist`).
+5. Optional: Configure a CDN (Cloudflare / Netlify / Vercel) + cache immutable assets.
+
+### Hardening & Polishing Already Implemented
+| Area | Status |
+|------|--------|
+| NASA API key externalized | ✅ via `import.meta.env.VITE_NASA_API_KEY` |
+| Fetch error handling & retry avoidance | ✅ (cache key prevents duplicate window fetch) |
+| Graceful fallback for Earth rendering | ✅ procedural fallback + optional textured mode |
+| Location picking UX | ✅ presets + globe + search (OSM) |
+| Simulation engine | ✅ base + beta physics card |
+| Export/Share | ✅ JSON/TXT + Web Share / clipboard |
+| Dark/Light theme | ✅ toggle present |
+| Scroll performance | ✅ Lenis + reduced layout thrash |
+| Error boundary | ✅ wraps app |
+
+### Suggested Future Enhancements
+* Add unit tests for physics formulas in `lib/geo.ts`.
+* Implement service worker for offline caching of static assets.
+* Add Sentry (or similar) for runtime error telemetry.
+* Provide quality selection (reduce shader detail / star count for low-end devices).
+* Integrate real orbit propagation for selected NEO.
+
+

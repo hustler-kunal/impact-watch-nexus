@@ -7,7 +7,10 @@ import ParameterControls from "@/components/ParameterControls";
 import ImpactCalculator from "@/components/ImpactCalculator";
 import MitigationStrategies from "@/components/MitigationStrategies";
 import NASADataPanel from "@/components/NASADataPanel";
-import ImpactLocationSelector from "@/components/ImpactLocationSelector";
+import ImpactLocationSelector from "@/components/ImpactLocationSelector"; // legacy presets component (still used inside new panel)
+import LocationPickerPanel from "@/components/location/LocationPickerPanel";
+import useImpactSimulation from "@/hooks/useImpactSimulation";
+import { Card } from "@/components/ui/card";
 import TrajectoryTimeline from "@/components/TrajectoryTimeline";
 import NASADataIntegration from "@/components/NASADataIntegration";
 import DataExport from "@/components/DataExport";
@@ -46,10 +49,10 @@ const Index = () => {
   const [asteroidSpeed, setAsteroidSpeed] = useState(20);
   const [impactAngle, setImpactAngle] = useState(45);
   const [asteroidDistance, setAsteroidDistance] = useState(6);
-  const [impactLocation, setImpactLocation] = useState({ lat: 0, lon: -140, name: "Pacific Ocean" });
+  const [impactLocation, setImpactLocation] = useState({ lat: 0, lon: -140, name: "Pacific Ocean", type: 'ocean' });
 
   const handleLocationSelect = (lat: number, lon: number, location: string) => {
-    setImpactLocation({ lat, lon, name: location });
+    setImpactLocation({ lat, lon, name: location, type: location.toLowerCase().includes('ocean') ? 'ocean' : location.toLowerCase().includes('mountain') ? 'mountain' : 'land' });
   };
 
   const calculations = useMemo(() => {
@@ -83,6 +86,14 @@ const Index = () => {
       dangerLevel
     };
   }, [asteroidSize, asteroidSpeed, impactAngle]);
+
+  // New physically-informed simulation (parallel to existing calculations, can replace later)
+  const sim = useImpactSimulation({
+    diameterM: asteroidSize,
+    velocity: asteroidSpeed * 1000,
+    angleDeg: impactAngle,
+    targetType: impactLocation.type as 'ocean' | 'land' | 'mountain',
+  });
 
   return (
     <main id="top" className="min-h-screen bg-background">
@@ -130,7 +141,7 @@ const Index = () => {
                 asteroidSpeed={asteroidSpeed / 10}
                 asteroidDistance={asteroidDistance}
               />
-              <ImpactLocationSelector onLocationSelect={handleLocationSelect} />
+              <LocationPickerPanel onChange={handleLocationSelect} />
             </div>
 
             {/* Right Column - Controls & Calculations */}
@@ -150,6 +161,26 @@ const Index = () => {
                 asteroidSpeed={asteroidSpeed}
                 impactAngle={impactAngle}
               />
+              <Card className="p-4 bg-card/60 border-border space-y-3">
+                <h4 className="font-semibold text-sm">Impact Physics (Beta)</h4>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs font-mono">
+                  <span className="text-muted-foreground">Energy TNT:</span>
+                  <span>{(sim.energyTonsTNT/1e6).toFixed(2)}M tons</span>
+                  <span className="text-muted-foreground">Retained %:</span>
+                  <span>{(sim.retainedEnergyJ / sim.impactEnergyJ * 100).toFixed(1)}%</span>
+                  <span className="text-muted-foreground">Crater Diam:</span>
+                  <span>{(sim.craterDiameterM/1000).toFixed(2)} km</span>
+                  <span className="text-muted-foreground">Seismic:</span>
+                  <span className="capitalize">{sim.seismicSeverity}</span>
+                  <span className="text-muted-foreground">Tsunami:</span>
+                  <span>{sim.tsunamiPotential ? 'Yes' : 'No'}</span>
+                </div>
+                {sim.notes.length > 0 && (
+                  <ul className="text-[10px] text-muted-foreground list-disc ml-4 space-y-0.5">
+                    {sim.notes.map(n => <li key={n}>{n}</li>)}
+                  </ul>
+                )}
+              </Card>
             </div>
           </div>
 

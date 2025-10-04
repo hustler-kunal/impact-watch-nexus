@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Satellite, RefreshCw, Database, TrendingUp } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { toast } from "sonner";
 
 interface AsteroidData {
@@ -16,15 +16,31 @@ interface AsteroidData {
   is_hazardous: boolean;
 }
 
+interface RawAsteroid {
+  name: string;
+  id: string;
+  designation?: string;
+  is_potentially_hazardous_asteroid: boolean;
+  close_approach_data: Array<{
+    close_approach_date: string;
+    relative_velocity: { kilometers_per_second: string };
+    miss_distance: { kilometers: string };
+  }>;
+  estimated_diameter: { meters: { estimated_diameter_min: number; estimated_diameter_max: number } };
+}
+
 const NASADataIntegration = () => {
   const [loading, setLoading] = useState(false);
   const [asteroidData, setAsteroidData] = useState<AsteroidData | null>(null);
 
-  const NASA_API_KEY = "UVsT6ih9Vud3RJxbUFyCr1hhWfXsuKfNlhEQpucf";
+  const NASA_API_KEY = import.meta.env.VITE_NASA_API_KEY || "DEMO_KEY";
+  const lastFetchedKeyRef = useRef<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchNASAData = async () => {
+    if (loading) return;
     setLoading(true);
-    
+    setError(null);
     try {
       // Get today's date and 7 days from now for the feed
       const today = new Date();
@@ -34,9 +50,13 @@ const NASADataIntegration = () => {
       const startDateStr = today.toISOString().split('T')[0];
       const endDateStr = endDate.toISOString().split('T')[0];
       
-      const response = await fetch(
-        `https://api.nasa.gov/neo/rest/v1/feed?start_date=${startDateStr}&end_date=${endDateStr}&api_key=${NASA_API_KEY}`
-      );
+      const cacheKey = `${startDateStr}:${endDateStr}`;
+      if (lastFetchedKeyRef.current === cacheKey && asteroidData) {
+        setLoading(false);
+        return; // avoid redundant fetch same window
+      }
+      const url = `https://api.nasa.gov/neo/rest/v1/feed?start_date=${startDateStr}&end_date=${endDateStr}&api_key=${NASA_API_KEY}`;
+      const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
       
       if (!response.ok) {
         throw new Error("Failed to fetch NASA data");
@@ -48,8 +68,8 @@ const NASADataIntegration = () => {
       let selectedAsteroid = null;
       
       for (const date in data.near_earth_objects) {
-        const asteroids = data.near_earth_objects[date];
-        const hazardous = asteroids.find((a: any) => a.is_potentially_hazardous_asteroid);
+        const asteroids: RawAsteroid[] = data.near_earth_objects[date];
+        const hazardous = asteroids.find((a: RawAsteroid) => a.is_potentially_hazardous_asteroid);
         if (hazardous) {
           selectedAsteroid = hazardous;
           break;
@@ -82,9 +102,8 @@ const NASADataIntegration = () => {
         };
         
         setAsteroidData(asteroidData);
-        toast.success("NASA NEO data loaded!", {
-          description: `Retrieved real data for ${asteroidData.name}`
-        });
+        toast.success("NASA NEO data loaded!", { description: `Retrieved real data for ${asteroidData.name}` });
+        lastFetchedKeyRef.current = cacheKey;
       } else {
         toast.error("No asteroid data available for this period");
       }
@@ -93,9 +112,8 @@ const NASADataIntegration = () => {
     } catch (error) {
       console.error("Error fetching NASA data:", error);
       setLoading(false);
-      toast.error("Failed to fetch NASA data", {
-        description: "Please try again later"
-      });
+      setError(error instanceof Error ? error.message : 'Unknown error');
+      toast.error("Failed to fetch NASA data", { description: "Check API key or try again later" });
     }
   };
 
@@ -125,6 +143,11 @@ const NASADataIntegration = () => {
         </Button>
       </div>
 
+      {error && (
+        <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/30 text-sm text-destructive">
+          API Error: {error} {NASA_API_KEY === 'DEMO_KEY' && <span className="ml-2 italic">(Using DEMO_KEY may be rate limited)</span>}
+        </div>
+      )}
       {asteroidData ? (
         <div className="space-y-4">
           <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border">
@@ -185,12 +208,12 @@ const NASADataIntegration = () => {
             </p>
           </div>
         </div>
-      ) : (
+      ) : (!loading && !error) ? (
         <div className="py-12 text-center">
           <Database className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
           <p className="text-muted-foreground">Click "Fetch Data" to load real-time asteroid information from NASA</p>
         </div>
-      )}
+      ) : null}
     </Card>
   );
 };
