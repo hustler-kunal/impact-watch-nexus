@@ -43,7 +43,7 @@ function loadGoogle(apiKey: string): Promise<void> {
 }
 
 export const GooglePlacesLocationPicker = ({ onChange, height = 320, defaultCenter = { lat: 20, lon: 0 } }: GooglePlacesLocationPickerProps) => {
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const apiKey = 'AIzaSyCKrmlUFVYeCECNHxG5wHGFxW2FgezuCfo';
   const mapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const markerRef = useRef<GMapsMarker | null>(null);
