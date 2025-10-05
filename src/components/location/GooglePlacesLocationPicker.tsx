@@ -1,18 +1,19 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
-// Extremely thin ambient declarations (avoid heavy dependency) – only what we touch
-interface GMapsLatLngLiteral { lat: number; lng: number }
-interface GMapsMapOptions { center: GMapsLatLngLiteral; zoom: number; mapTypeControl?: boolean; streetViewControl?: boolean; fullscreenControl?: boolean }
-interface GMapsEvent { latLng: { lat(): number; lng(): number } }
-interface GMapsMap { panTo(pos: GMapsLatLngLiteral): void; setZoom(z: number): void; addListener(evt: string, cb: (e: GMapsEvent) => void): void; getCenter(): { lat(): number; lng(): number } }
-interface GMapsMarker { setPosition(p: GMapsLatLngLiteral): void }
-interface GMapsAutocomplete { addListener(evt: string, cb: () => void): void; getPlace(): { geometry?: { location: { lat(): number; lng(): number } }; formatted_address?: string; name?: string } | undefined }
-interface GoogleMapsAPI { maps: { Map: new (el: HTMLElement, opts: GMapsMapOptions) => GMapsMap; Marker: new (opts: { map: GMapsMap; position: GMapsLatLngLiteral }) => GMapsMarker; places: { Autocomplete: new (input: HTMLInputElement, opts?: Record<string, unknown>) => GMapsAutocomplete } } }
-declare global { interface Window { google?: GoogleMapsAPI } }
+// Fix default marker icon issue with Leaflet + Vite
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
 
 interface GooglePlacesLocationPickerProps {
   onChange: (lat: number, lon: number, label?: string) => void;
@@ -20,104 +21,101 @@ interface GooglePlacesLocationPickerProps {
   defaultCenter?: { lat: number; lon: number };
 }
 
-const scriptId = 'google-maps-script';
-
-function loadGoogle(apiKey: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.google && window.google.maps) return resolve();
-    if (document.getElementById(scriptId)) {
-      const existing = document.getElementById(scriptId) as HTMLScriptElement;
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () => reject('Google Maps failed to load'));
-      return;
+// Geocoding using OpenStreetMap Nominatim
+async function geocodeLocation(query: string): Promise<{ lat: number; lon: number; name: string } | null> {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    const data = await res.json();
+    if (Array.isArray(data) && data.length) {
+      const best = data[0];
+      return { lat: parseFloat(best.lat), lon: parseFloat(best.lon), name: best.display_name };
     }
-    const script = document.createElement('script');
-    script.id = scriptId;
-    script.async = true;
-    script.defer = true;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-    script.onload = () => resolve();
-    script.onerror = () => reject('Google Maps failed to load');
-    document.head.appendChild(script);
+  } catch (e) {
+    toast.error('Failed to search location');
+  }
+  return null;
+}
+
+function MapClickHandler({ onLocationChange }: { onLocationChange: (lat: number, lon: number) => void }) {
+  useMapEvents({
+    click: (e) => {
+      onLocationChange(e.latlng.lat, e.latlng.lng);
+    },
   });
+  return null;
 }
 
 export const GooglePlacesLocationPicker = ({ onChange, height = 320, defaultCenter = { lat: 20, lon: 0 } }: GooglePlacesLocationPickerProps) => {
-  const apiKey = 'AIzaSyCKrmlUFVYeCECNHxG5wHGFxW2FgezuCfo';
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const markerRef = useRef<GMapsMarker | null>(null);
-  const mapInstanceRef = useRef<GMapsMap | null>(null);
-  const autocompleteRef = useRef<GMapsAutocomplete | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [markerPosition, setMarkerPosition] = useState<[number, number]>([defaultCenter.lat, defaultCenter.lon]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const mapRef = useRef<L.Map | null>(null);
 
-  const updateLocation = useCallback((lat: number, lon: number, label?: string) => {
-    if (markerRef.current) markerRef.current.setPosition({ lat, lng: lon });
-    onChange(lat, lon, label);
-  }, [onChange]);
+  const handleLocationChange = (lat: number, lon: number, label?: string) => {
+    setMarkerPosition([lat, lon]);
+    onChange(lat, lon, label || 'Custom Location');
+    if (mapRef.current) {
+      mapRef.current.flyTo([lat, lon], 6);
+    }
+  };
 
-  useEffect(() => {
-    if (!apiKey) {
-      setError('Missing Google Maps API key (VITE_GOOGLE_MAPS_API_KEY)');
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      toast.error('Please enter a location to search');
       return;
     }
-    setLoading(true);
-    loadGoogle(apiKey)
-      .then(() => {
-        if (!mapRef.current) return;
-        mapInstanceRef.current = new window.google!.maps.Map(mapRef.current, {
-          center: { lat: defaultCenter.lat, lng: defaultCenter.lon },
-          zoom: 3,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: false,
-        });
-        const c = mapInstanceRef.current.getCenter();
-        markerRef.current = new window.google!.maps.Marker({ map: mapInstanceRef.current, position: { lat: c.lat(), lng: c.lng() } });
-        mapInstanceRef.current.addListener('click', (e: GMapsEvent) => {
-          updateLocation(e.latLng.lat(), e.latLng.lng(), 'Custom');
-        });
-        if (inputRef.current) {
-          autocompleteRef.current = new window.google!.maps.places.Autocomplete(inputRef.current, { types: ['geocode'] });
-          autocompleteRef.current.addListener('place_changed', () => {
-            const place = autocompleteRef.current!.getPlace();
-            if (!place || !place.geometry) {
-              toast.error('Place details unavailable');
-              return;
-            }
-            const lat = place.geometry.location.lat();
-            const lon = place.geometry.location.lng();
-            updateLocation(lat, lon, place.formatted_address || place.name);
-            mapInstanceRef.current.panTo({ lat, lng: lon });
-            mapInstanceRef.current.setZoom(6);
-          });
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        setError(typeof err === 'string' ? err : 'Failed to init Google Maps');
-        setLoading(false);
-      });
-  }, [apiKey, defaultCenter.lat, defaultCenter.lon, updateLocation]);
+    setSearching(true);
+    const result = await geocodeLocation(searchQuery);
+    setSearching(false);
+    if (result) {
+      handleLocationChange(result.lat, result.lon, result.name);
+      toast.success('Location found!');
+    } else {
+      toast.error('Location not found');
+    }
+  };
 
-  const recenter = () => {
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.panTo({ lat: defaultCenter.lat, lng: defaultCenter.lon });
-      mapInstanceRef.current.setZoom(3);
+  const handleReset = () => {
+    setMarkerPosition([defaultCenter.lat, defaultCenter.lon]);
+    onChange(defaultCenter.lat, defaultCenter.lon, 'Reset');
+    if (mapRef.current) {
+      mapRef.current.flyTo([defaultCenter.lat, defaultCenter.lon], 3);
     }
   };
 
   return (
     <Card className="p-4 space-y-3 bg-card/50 border-border">
-      <h4 className="font-semibold text-sm">Google Location Picker</h4>
-      {error && <div className="text-xs text-destructive bg-destructive/10 border border-destructive/30 p-2 rounded">{error}</div>}
+      <h4 className="font-semibold text-sm">Location Picker</h4>
       <div className="flex gap-2 items-center">
-        <Input ref={inputRef} placeholder="Search places..." disabled={loading || !!error} />
-        <Button type="button" variant="outline" onClick={recenter} disabled={loading || !!error}>Reset</Button>
+        <Input 
+          placeholder="Search places..." 
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+          disabled={searching}
+        />
+        <Button type="button" variant="outline" onClick={handleSearch} disabled={searching}>
+          {searching ? 'Searching...' : 'Search'}
+        </Button>
+        <Button type="button" variant="outline" onClick={handleReset}>Reset</Button>
       </div>
-      <div ref={mapRef} style={{ height, width: '100%', borderRadius: '0.5rem' }} className="overflow-hidden border border-border bg-background" />
-      <p className="text-[10px] text-muted-foreground">Data © Google • Uses Places Autocomplete & Map click to set impact site.</p>
+      <div style={{ height, width: '100%', borderRadius: '0.5rem' }} className="overflow-hidden border border-border">
+        <MapContainer
+          center={[defaultCenter.lat, defaultCenter.lon]}
+          zoom={3}
+          style={{ height: '100%', width: '100%' }}
+          ref={mapRef}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <Marker position={markerPosition} />
+          <MapClickHandler onLocationChange={handleLocationChange} />
+        </MapContainer>
+      </div>
+      <p className="text-[10px] text-muted-foreground">Data © OpenStreetMap • Free and open source mapping. Click map to set location.</p>
     </Card>
   );
 };
