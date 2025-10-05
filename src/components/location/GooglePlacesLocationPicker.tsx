@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -37,26 +36,50 @@ async function geocodeLocation(query: string): Promise<{ lat: number; lon: numbe
   return null;
 }
 
-function MapClickHandler({ onLocationChange }: { onLocationChange: (lat: number, lon: number) => void }) {
-  useMapEvents({
-    click: (e) => {
-      onLocationChange(e.latlng.lat, e.latlng.lng);
-    },
-  });
-  return null;
-}
-
 export const GooglePlacesLocationPicker = ({ onChange, height = 320, defaultCenter = { lat: 20, lon: 0 } }: GooglePlacesLocationPickerProps) => {
   const [markerPosition, setMarkerPosition] = useState<[number, number]>([defaultCenter.lat, defaultCenter.lon]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+
+    // Initialize map
+    const map = L.map(containerRef.current).setView([defaultCenter.lat, defaultCenter.lon], 3);
+    mapRef.current = map;
+
+    // Add tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // Add marker
+    const marker = L.marker([defaultCenter.lat, defaultCenter.lon]).addTo(map);
+    markerRef.current = marker;
+
+    // Handle map clicks
+    map.on('click', (e: L.LeafletMouseEvent) => {
+      const { lat, lng } = e.latlng;
+      setMarkerPosition([lat, lng]);
+      marker.setLatLng([lat, lng]);
+      onChange(lat, lng, 'Custom Location');
+    });
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
+  }, []);
 
   const handleLocationChange = (lat: number, lon: number, label?: string) => {
     setMarkerPosition([lat, lon]);
     onChange(lat, lon, label || 'Custom Location');
-    if (mapRef.current) {
+    if (mapRef.current && markerRef.current) {
       mapRef.current.flyTo([lat, lon], 6);
+      markerRef.current.setLatLng([lat, lon]);
     }
   };
 
@@ -79,8 +102,9 @@ export const GooglePlacesLocationPicker = ({ onChange, height = 320, defaultCent
   const handleReset = () => {
     setMarkerPosition([defaultCenter.lat, defaultCenter.lon]);
     onChange(defaultCenter.lat, defaultCenter.lon, 'Reset');
-    if (mapRef.current) {
+    if (mapRef.current && markerRef.current) {
       mapRef.current.flyTo([defaultCenter.lat, defaultCenter.lon], 3);
+      markerRef.current.setLatLng([defaultCenter.lat, defaultCenter.lon]);
     }
   };
 
@@ -100,21 +124,11 @@ export const GooglePlacesLocationPicker = ({ onChange, height = 320, defaultCent
         </Button>
         <Button type="button" variant="outline" onClick={handleReset}>Reset</Button>
       </div>
-      <div style={{ height, width: '100%', borderRadius: '0.5rem' }} className="overflow-hidden border border-border">
-        <MapContainer
-          center={[defaultCenter.lat, defaultCenter.lon]}
-          zoom={3}
-          style={{ height: '100%', width: '100%' }}
-          ref={mapRef}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          <Marker position={markerPosition} />
-          <MapClickHandler onLocationChange={handleLocationChange} />
-        </MapContainer>
-      </div>
+      <div 
+        ref={containerRef}
+        style={{ height, width: '100%', borderRadius: '0.5rem' }} 
+        className="overflow-hidden border border-border"
+      />
       <p className="text-[10px] text-muted-foreground">Data © OpenStreetMap • Free and open source mapping. Click map to set location.</p>
     </Card>
   );
