@@ -34,7 +34,7 @@ const NASADataIntegration = () => {
   const [loading, setLoading] = useState(false);
   const [asteroidData, setAsteroidData] = useState<AsteroidData | null>(null);
 
-  const NASA_API_KEY = import.meta.env.VITE_NASA_API_KEY || "DEMO_KEY";
+  const NASA_API_KEY = "tOCSNFleT5BEIgLEuju9Ei7N3WFOTPs9PyDpbYfQ";
   const lastFetchedKeyRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -148,9 +148,6 @@ const NASADataIntegration = () => {
         )}
         {asteroidData && !loading && !error && (
           <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/40">Live</Badge>
-        )}
-        {NASA_API_KEY === 'DEMO_KEY' && (
-          <Badge variant="outline" className="bg-yellow-500/10 text-yellow-400 border-yellow-500/40">DEMO_KEY</Badge>
         )}
       </div>
       {error && (
