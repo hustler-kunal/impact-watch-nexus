@@ -33,6 +33,7 @@ interface RawAsteroid {
 const NASADataIntegration = () => {
   const [loading, setLoading] = useState(false);
   const [asteroidData, setAsteroidData] = useState<AsteroidData | null>(null);
+  const [asteroidList, setAsteroidList] = useState<AsteroidData[]>([]);
 
   const NASA_API_KEY = "tOCSNFleT5BEIgLEuju9Ei7N3WFOTPs9PyDpbYfQ";
   const lastFetchedKeyRef = useRef<string | null>(null);
@@ -42,73 +43,66 @@ const NASADataIntegration = () => {
     if (loading) return;
     setLoading(true);
     setError(null);
+
     try {
-      // Get today's date and 7 days from now for the feed
+      // Get today's date and 7 days from now
       const today = new Date();
       const endDate = new Date();
       endDate.setDate(today.getDate() + 7);
-      
+
       const startDateStr = today.toISOString().split('T')[0];
       const endDateStr = endDate.toISOString().split('T')[0];
-      
+
       const cacheKey = `${startDateStr}:${endDateStr}`;
-      if (lastFetchedKeyRef.current === cacheKey && asteroidData) {
+      if (lastFetchedKeyRef.current === cacheKey && asteroidList.length > 0) {
         setLoading(false);
-        return; // avoid redundant fetch same window
+        return; // avoid redundant fetch
       }
+
       const url = `https://api.nasa.gov/neo/rest/v1/feed?start_date=${startDateStr}&end_date=${endDateStr}&api_key=${NASA_API_KEY}`;
-  interface FeedResponse { near_earth_objects: Record<string, RawAsteroid[]> }
-  const data: FeedResponse = await getJson(url, {}, { retries: 2, backoffMs: 700, cacheKey: `neo:${cacheKey}`, cacheTtlMs: 5 * 60_000 });
-      
-      // Get the first potentially hazardous asteroid from the response
-      let selectedAsteroid = null;
-      
-      for (const date in data.near_earth_objects) {
-        const asteroids: RawAsteroid[] = data.near_earth_objects[date];
-        const hazardous = asteroids.find((a: RawAsteroid) => a.is_potentially_hazardous_asteroid);
-        if (hazardous) {
-          selectedAsteroid = hazardous;
-          break;
-        }
-      }
-      
-      // If no hazardous, get the first asteroid
-      if (!selectedAsteroid) {
-        for (const date in data.near_earth_objects) {
-          if (data.near_earth_objects[date].length > 0) {
-            selectedAsteroid = data.near_earth_objects[date][0];
-            break;
-          }
-        }
-      }
-      
-      if (selectedAsteroid) {
-        const closeApproach = selectedAsteroid.close_approach_data[0];
-        const diameter = selectedAsteroid.estimated_diameter.meters;
-        
-        const asteroidData: AsteroidData = {
-          name: selectedAsteroid.name,
-          designation: selectedAsteroid.designation || selectedAsteroid.id,
+      interface FeedResponse { near_earth_objects: Record<string, RawAsteroid[]> }
+      const data: FeedResponse = await getJson(url, {}, { retries: 2, backoffMs: 700, cacheKey: `neo:${cacheKey}`, cacheTtlMs: 5 * 60_000 });
+
+      // Flatten all asteroids from all dates
+      const allAsteroids: RawAsteroid[] = Object.values(data.near_earth_objects).flat();
+
+      // Sort by closest approach date
+      allAsteroids.sort((a, b) => {
+        const da = new Date(a.close_approach_data[0].close_approach_date).getTime();
+        const db = new Date(b.close_approach_data[0].close_approach_date).getTime();
+        return da - db;
+      });
+
+      // Convert to display-friendly format
+      const asteroidList: AsteroidData[] = allAsteroids.map(a => {
+        const closeApproach = a.close_approach_data[0];
+        const diameter = a.estimated_diameter.meters;
+        return {
+          name: a.name,
+          designation: a.designation || a.id,
           diameter_min: Math.round(diameter.estimated_diameter_min),
           diameter_max: Math.round(diameter.estimated_diameter_max),
           velocity: parseFloat(closeApproach.relative_velocity.kilometers_per_second),
           approach_date: closeApproach.close_approach_date,
           miss_distance: parseFloat(closeApproach.miss_distance.kilometers),
-          is_hazardous: selectedAsteroid.is_potentially_hazardous_asteroid
+          is_hazardous: a.is_potentially_hazardous_asteroid,
         };
-        
-        setAsteroidData(asteroidData);
-        toast.success("NASA NEO data loaded!", { description: `Retrieved real data for ${asteroidData.name}` });
+      });
+
+      if (asteroidList.length > 0) {
+        setAsteroidList(asteroidList);
+        setAsteroidData(asteroidList[0]); // display first asteroid for now
+        toast.success(`Loaded ${asteroidList.length} asteroids from NASA`);
         lastFetchedKeyRef.current = cacheKey;
       } else {
         toast.error("No asteroid data available for this period");
       }
-      
+
       setLoading(false);
     } catch (error) {
       console.error("Error fetching NASA data:", error);
       setLoading(false);
-      setError(error instanceof Error ? error.message : 'Unknown error');
+      setError(error instanceof Error ? error.message : "Unknown error");
       toast.error("Failed to fetch NASA data", { description: "Check API key or try again later" });
     }
   };
@@ -150,79 +144,53 @@ const NASADataIntegration = () => {
           <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/40">Live</Badge>
         )}
       </div>
+
       {error && (
         <div className="p-3 rounded-md bg-destructive/10 border border-destructive/30 text-xs text-destructive leading-relaxed">
           {error}
         </div>
       )}
-      {asteroidData ? (
+
+      {asteroidList.length > 0 && !loading && !error ? (
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border">
-            <div>
-              <h4 className="text-lg font-semibold text-foreground mb-1">{asteroidData.name}</h4>
-              <p className="text-sm text-muted-foreground">Designation: {asteroidData.designation}</p>
-            </div>
-            <Badge className={asteroidData.is_hazardous 
-              ? "bg-destructive/20 text-destructive border-destructive/50"
-              : "bg-green-500/20 text-green-400 border-green-500/50"
-            }>
-              {asteroidData.is_hazardous ? "Potentially Hazardous" : "Non-Hazardous"}
-            </Badge>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 rounded-lg bg-accent/5 border border-accent/20">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="w-4 h-4 text-accent" />
-                <span className="text-sm text-muted-foreground">Diameter Range</span>
+          {asteroidList.map((asteroid) => (
+            <div key={asteroid.designation} className="space-y-4">
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border">
+                <div>
+                  <h4 className="text-lg font-semibold text-foreground mb-1">{asteroid.name}</h4>
+                  <p className="text-sm text-muted-foreground">Designation: {asteroid.designation}</p>
+                </div>
+                <Badge className={asteroid.is_hazardous 
+                  ? "bg-destructive/20 text-destructive border-destructive/50"
+                  : "bg-green-500/20 text-green-400 border-green-500/50"
+                }>
+                  {asteroid.is_hazardous ? "Potentially Hazardous" : "Non-Hazardous"}
+                </Badge>
               </div>
-              <p className="text-xl font-bold text-accent">
-                {asteroidData.diameter_min}-{asteroidData.diameter_max}m
-              </p>
-            </div>
 
-            <div className="p-4 rounded-lg bg-secondary/5 border border-secondary/20">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="w-4 h-4 text-secondary" />
-                <span className="text-sm text-muted-foreground">Velocity</span>
-              </div>
-              <p className="text-xl font-bold text-secondary">{asteroidData.velocity} km/s</p>
-            </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg bg-accent/5 border border-accent/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="w-4 h-4 text-accent" />
+                    <span className="text-sm text-muted-foreground">Diameter Range</span>
+                  </div>
+                  <p className="text-xl font-bold text-accent">{asteroid.diameter_min}-{asteroid.diameter_max}m</p>
+                </div>
 
-            <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-              <div className="flex items-center gap-2 mb-2">
-                <Database className="w-4 h-4 text-primary" />
-                <span className="text-sm text-muted-foreground">Approach Date</span>
-              </div>
-              <p className="text-lg font-bold text-primary">{asteroidData.approach_date}</p>
-            </div>
+                <div className="p-4 rounded-lg bg-secondary/5 border border-secondary/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="w-4 h-4 text-secondary" />
+                    <span className="text-sm text-muted-foreground">Velocity</span>
+                  </div>
+                  <p className="text-xl font-bold text-secondary">{asteroid.velocity} km/s</p>
+                </div>
 
-            <div className="p-4 rounded-lg bg-destructive/5 border border-destructive/20">
-              <div className="flex items-center gap-2 mb-2">
-                <Satellite className="w-4 h-4 text-destructive" />
-                <span className="text-sm text-muted-foreground">Miss Distance</span>
-              </div>
-              <p className="text-lg font-bold text-destructive">
-                {(asteroidData.miss_distance / 384400).toFixed(2)} LD
-              </p>
-            </div>
-          </div>
+                <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Database className="w-4 h-4 text-primary" />
+                    <span className="text-sm text-muted-foreground">Approach Date</span>
+                  </div>
+                  <p className="text-lg font-bold text-primary">{asteroid.approach_date}</p>
+                </div>
 
-          <div className="p-4 rounded-lg bg-muted/30 border border-muted">
-            <p className="text-xs text-muted-foreground">
-              <strong className="text-foreground">Data Source:</strong> NASA Center for Near-Earth Object Studies (CNEOS).
-              LD = Lunar Distance (384,400 km). Data retrieved from NEO API for demonstration purposes.
-            </p>
-          </div>
-        </div>
-      ) : (!loading && !error) ? (
-        <div className="py-12 text-center">
-          <Database className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-          <p className="text-muted-foreground">Click "Fetch Data" to load real-time asteroid information from NASA</p>
-        </div>
-      ) : null}
-    </Card>
-  );
-};
-
-export default NASADataIntegration;
+                <div className="p-4 rounded-lg bg-destructive/
